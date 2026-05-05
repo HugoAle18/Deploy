@@ -1,6 +1,7 @@
 import streamlit as st
 import joblib
 import pandas as pd
+import numpy as np
 
 # ============================================================
 # CONFIGURACIÓN
@@ -16,11 +17,8 @@ st.set_page_config(
 # ============================================================
 model = joblib.load("modelo_final.pkl")
 
-# 🔥 USA EL MISMO THRESHOLD DE FASE 5
-THRESHOLD = 0.40
-
 # ============================================================
-# FEATURES EXACTAS (IGUAL QUE ENTRENAMIENTO)
+# ORDEN EXACTO DE FEATURES (IGUAL QUE ENTRENAMIENTO)
 # ============================================================
 features_order = [
     'Curricular units 1st sem (approved)',
@@ -40,7 +38,9 @@ features_order = [
     'aprobacion_rate_2',
     'variacion_rendimiento',
     'carga_total',
-    'riesgo_financiero'
+    'riesgo_financiero',
+    'ratio_notas',           # 🔥 IMPORTANTE
+    'estres_academico'       # 🔥 IMPORTANTE
 ]
 
 # ============================================================
@@ -52,9 +52,6 @@ st.divider()
 
 col1, col2 = st.columns(2)
 
-# =============================
-# COLUMNA 1
-# =============================
 with col1:
     st.subheader("📚 Rendimiento Académico")
 
@@ -66,9 +63,6 @@ with col1:
     enrolled1 = st.number_input("Cursos inscritos S1", 0.0, 30.0)
     enrolled2 = st.number_input("Cursos inscritos S2", 0.0, 30.0)
 
-# =============================
-# COLUMNA 2
-# =============================
 with col2:
     st.subheader("👤 Datos del Estudiante")
 
@@ -113,22 +107,37 @@ if st.button("🔍 Analizar Riesgo", use_container_width=True):
     }
 
     # ========================================================
-    # FEATURES DERIVADAS (SOLO LAS DEL ENTRENAMIENTO)
+    # FEATURES DERIVADAS (IGUAL QUE ENTRENAMIENTO)
     # ========================================================
-    data["aprobacion_rate_1"] = approved1 / enrolled1 if enrolled1 > 0 else 0
-    data["aprobacion_rate_2"] = approved2 / enrolled2 if enrolled2 > 0 else 0
-    data["variacion_rendimiento"] = grade2 - grade1
-    data["carga_total"] = enrolled1 + enrolled2
-    data["riesgo_financiero"] = (
+    aprobacion_rate_1 = approved1 / enrolled1 if enrolled1 > 0 else 0
+    aprobacion_rate_2 = approved2 / enrolled2 if enrolled2 > 0 else 0
+    variacion_rendimiento = grade2 - grade1
+    carga_total = enrolled1 + enrolled2
+
+    riesgo_financiero = (
         (1 if tuition == "No" else 0) +
         (1 if debtor == "Sí" else 0) +
         (1 if scholarship == "No" else 0)
     )
 
+    ratio_notas = grade2 / (grade1 + 1e-5)
+    estres_academico = carga_total / (age + 1)
+
+    data.update({
+        "aprobacion_rate_1": aprobacion_rate_1,
+        "aprobacion_rate_2": aprobacion_rate_2,
+        "variacion_rendimiento": variacion_rendimiento,
+        "carga_total": carga_total,
+        "riesgo_financiero": riesgo_financiero,
+        "ratio_notas": ratio_notas,
+        "estres_academico": estres_academico
+    })
+
     # ========================================================
-    # DATAFRAME FINAL
+    # DATAFRAME ORDENADO
     # ========================================================
-    df_input = pd.DataFrame([data])[features_order]
+    df_input = pd.DataFrame([data])
+    df_input = df_input[features_order]
 
     # ========================================================
     # PREDICCIÓN
@@ -146,12 +155,12 @@ if st.button("🔍 Analizar Riesgo", use_container_width=True):
         st.metric("Probabilidad", f"{proba:.2%}")
 
     with colB:
-        if proba >= 0.75:
-            st.error("🚨 RIESGO CRÍTICO")
-        elif proba >= THRESHOLD:
-            st.warning("⚠️ RIESGO MEDIO")
+        if proba >= 0.7:
+            st.error("RIESGO CRÍTICO")
+        elif proba >= 0.4:
+            st.warning("RIESGO MEDIO")
         else:
-            st.success("✅ RIESGO BAJO")
+            st.success("RIESGO BAJO")
 
     with colC:
         st.info("Modelo MLP + Pipeline")
@@ -159,8 +168,7 @@ if st.button("🔍 Analizar Riesgo", use_container_width=True):
     st.progress(float(proba))
 
     # ========================================================
-    # DEBUG
+    # DEBUG (CLAVE)
     # ========================================================
     with st.expander("🔎 Ver datos procesados"):
         st.dataframe(df_input)
-        st.write(f"Probabilidad cruda: {proba}")
