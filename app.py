@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 # ============================================================
-# CONFIGURACIÓN DE PÁGINA (UI PROFESIONAL)
+# CONFIGURACIÓN
 # ============================================================
 st.set_page_config(
     page_title="Sistema de Alerta Temprana",
@@ -13,60 +13,88 @@ st.set_page_config(
 )
 
 # ============================================================
-# MODELO
+# CARGAR PIPELINE (CLAVE)
 # ============================================================
-model = joblib.load("modelo_final.pkl")
+model = joblib.load("modelo_final.pkl")  # 🔥 Pipeline completo
 
 # ============================================================
-# HEADER
+# FEATURES (MISMO ORDEN QUE ENTRENAMIENTO)
+# ============================================================
+features_order = [
+    'Curricular units 1st sem (approved)',
+    'Curricular units 1st sem (grade)',
+    'Curricular units 2nd sem (approved)',
+    'Curricular units 2nd sem (grade)',
+    'Tuition fees up to date',
+    'Debtor',
+    'Scholarship holder',
+    'Age at enrollment',
+    'Displaced',
+    'Gender',
+    'GDP',
+    'Unemployment rate',
+    'Inflation rate',
+    'aprobacion_rate_1',
+    'aprobacion_rate_2',
+    'variacion_rendimiento',
+    'carga_total',
+    'riesgo_financiero',
+    'ratio_notas',
+    'estres_academico'
+]
+
+# ============================================================
+# UI
 # ============================================================
 st.title("🎓 Sistema Inteligente de Predicción de Deserción")
-st.markdown("### Modelo de Machine Learning para análisis académico")
-
+st.markdown("### Modelo de Machine Learning (MLP + Pipeline)")
 st.divider()
 
-# ============================================================
-# LAYOUT PROFESIONAL (2 COLUMNAS)
-# ============================================================
 col1, col2 = st.columns(2)
 
+# =============================
+# COLUMNA 1
+# =============================
 with col1:
     st.subheader("📚 Rendimiento Académico")
 
-    approved1 = st.number_input("Aprobados Semestre 1", 0.0, 30.0)
-    grade1 = st.number_input("Nota Promedio Semestre 1", 0.0, 20.0)
-    approved2 = st.number_input("Aprobados Semestre 2", 0.0, 30.0)
-    grade2 = st.number_input("Nota Promedio Semestre 2", 0.0, 20.0)
+    approved1 = st.number_input("Aprobados S1", 0.0, 30.0)
+    grade1 = st.number_input("Nota S1", 0.0, 20.0)
+    approved2 = st.number_input("Aprobados S2", 0.0, 30.0)
+    grade2 = st.number_input("Nota S2", 0.0, 20.0)
 
     enrolled1 = st.number_input("Cursos inscritos S1", 0.0, 30.0)
     enrolled2 = st.number_input("Cursos inscritos S2", 0.0, 30.0)
 
+# =============================
+# COLUMNA 2
+# =============================
 with col2:
-    st.subheader("👤 Información del Estudiante")
+    st.subheader("👤 Datos del Estudiante")
 
     age = st.number_input("Edad", 15, 80)
     gender = st.selectbox("Género", ["Femenino", "Masculino"])
     displaced = st.selectbox("Desplazado", ["No", "Sí"])
 
-    st.subheader("💰 Situación Financiera")
-    tuition = st.selectbox("Pagos al día", ["Sí", "No"])
+    st.subheader("💰 Finanzas")
+    tuition = st.selectbox("Pago al día", ["Sí", "No"])
     debtor = st.selectbox("Deudor", ["No", "Sí"])
     scholarship = st.selectbox("Becado", ["No", "Sí"])
 
-    st.subheader("🌎 Contexto Económico")
+    st.subheader("🌎 Economía")
     gdp = st.number_input("PBI")
     unemployment = st.number_input("Desempleo")
     inflation = st.number_input("Inflación")
 
 # ============================================================
-# BOTÓN DE PREDICCIÓN
+# BOTÓN
 # ============================================================
 st.divider()
 
-if st.button("🔍 Analizar Riesgo de Deserción", use_container_width=True):
+if st.button("🔍 Analizar Riesgo", use_container_width=True):
 
     # ========================================================
-    # PREPROCESAMIENTO (IGUAL AL ENTRENAMIENTO)
+    # DATA BASE
     # ========================================================
     data = {
         "Curricular units 1st sem (approved)": approved1,
@@ -82,41 +110,55 @@ if st.button("🔍 Analizar Riesgo de Deserción", use_container_width=True):
         "GDP": gdp,
         "Unemployment rate": unemployment,
         "Inflation rate": inflation,
-        "Curricular units 1st sem (enrolled)": enrolled1,
-        "Curricular units 2nd sem (enrolled)": enrolled2,
     }
 
     # ========================================================
-    # FEATURES DERIVADAS
+    # FEATURES DERIVADAS (IGUAL QUE ENTRENAMIENTO)
     # ========================================================
-    data["aprobacion_rate_1"] = approved1 / enrolled1 if enrolled1 > 0 else 0
-    data["aprobacion_rate_2"] = approved2 / enrolled2 if enrolled2 > 0 else 0
-    data["ratio_notas"] = grade2 / (grade1 + 1e-5)
-    data["estres_academico"] = (enrolled1 + enrolled2) / (age + 1)
-    data["variacion_rendimiento"] = grade2 - grade1
-    data["carga_total"] = enrolled1 + enrolled2
-    data["riesgo_financiero"] = (
-        (data["Tuition fees up to date"] == 0) +
-        (data["Debtor"] == 1) +
-        (data["Scholarship holder"] == 0)
+    aprobacion_rate_1 = approved1 / enrolled1 if enrolled1 > 0 else 0
+    aprobacion_rate_2 = approved2 / enrolled2 if enrolled2 > 0 else 0
+    variacion_rendimiento = grade2 - grade1
+    carga_total = enrolled1 + enrolled2
+    riesgo_financiero = (
+        (1 if tuition == "No" else 0) +
+        (1 if debtor == "Sí" else 0) +
+        (1 if scholarship == "No" else 0)
     )
 
-    df_input = pd.DataFrame([data])
+    ratio_notas = grade2 / (grade1 + 1e-5)
+    estres_academico = carga_total / (age + 1)
+
+    # Agregar al diccionario
+    data.update({
+        "aprobacion_rate_1": aprobacion_rate_1,
+        "aprobacion_rate_2": aprobacion_rate_2,
+        "variacion_rendimiento": variacion_rendimiento,
+        "carga_total": carga_total,
+        "riesgo_financiero": riesgo_financiero,
+        "ratio_notas": ratio_notas,
+        "estres_academico": estres_academico
+    })
 
     # ========================================================
-    # PREDICCIÓN
+    # DATAFRAME FINAL ORDENADO
+    # ========================================================
+    df_input = pd.DataFrame([data])
+    df_input = df_input[features_order]  # 🔥 ORDEN EXACTO
+
+    # ========================================================
+    # PREDICCIÓN (PIPELINE)
     # ========================================================
     proba = model.predict_proba(df_input)[0][1]
 
     # ========================================================
-    # RESULTADO VISUAL PROFESIONAL
+    # RESULTADO
     # ========================================================
-    st.subheader("📊 Resultado del Análisis")
+    st.subheader("📊 Resultado")
 
     colA, colB, colC = st.columns(3)
 
     with colA:
-        st.metric("Probabilidad de Deserción", f"{proba:.2%}")
+        st.metric("Probabilidad", f"{proba:.2%}")
 
     with colB:
         if proba >= 0.7:
@@ -127,11 +169,8 @@ if st.button("🔍 Analizar Riesgo de Deserción", use_container_width=True):
             st.success("RIESGO BAJO")
 
     with colC:
-        st.info("Modelo ML - MLP Classifier")
+        st.info("Modelo MLP + Pipeline")
 
-    # ========================================================
-    # BARRA VISUAL
-    # ========================================================
     st.progress(float(proba))
 
     # ========================================================
@@ -140,8 +179,14 @@ if st.button("🔍 Analizar Riesgo de Deserción", use_container_width=True):
     st.subheader("💡 Recomendación")
 
     if proba >= 0.7:
-        st.write("⚠️ Intervención inmediata: tutoría + seguimiento académico + apoyo financiero")
+        st.write("⚠️ Intervención inmediata (académica + financiera)")
     elif proba >= 0.4:
-        st.write("📌 Monitoreo continuo y apoyo académico preventivo")
+        st.write("📌 Seguimiento continuo")
     else:
-        st.write("✅ Estudiante en condición estable")
+        st.write("✅ Estudiante estable")
+
+    # ========================================================
+    # DEBUG (MUY IMPORTANTE PARA VALIDAR)
+    # ========================================================
+    with st.expander("🔎 Ver datos procesados"):
+        st.dataframe(df_input)
