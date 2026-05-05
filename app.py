@@ -1,7 +1,6 @@
 import streamlit as st
 import joblib
 import pandas as pd
-import numpy as np
 
 # ============================================================
 # CONFIGURACIÓN
@@ -13,12 +12,15 @@ st.set_page_config(
 )
 
 # ============================================================
-# CARGAR PIPELINE (CLAVE)
+# CARGAR MODELO (PIPELINE COMPLETO)
 # ============================================================
-model = joblib.load("modelo_final.pkl")  # 🔥 Pipeline completo
+model = joblib.load("modelo_final.pkl")
+
+# 🔥 USA EL MISMO THRESHOLD DE FASE 5
+THRESHOLD = 0.40
 
 # ============================================================
-# FEATURES (MISMO ORDEN QUE ENTRENAMIENTO)
+# FEATURES EXACTAS (IGUAL QUE ENTRENAMIENTO)
 # ============================================================
 features_order = [
     'Curricular units 1st sem (approved)',
@@ -38,9 +40,7 @@ features_order = [
     'aprobacion_rate_2',
     'variacion_rendimiento',
     'carga_total',
-    'riesgo_financiero',
-    'ratio_notas',
-    'estres_academico'
+    'riesgo_financiero'
 ]
 
 # ============================================================
@@ -94,7 +94,7 @@ st.divider()
 if st.button("🔍 Analizar Riesgo", use_container_width=True):
 
     # ========================================================
-    # DATA BASE
+    # BASE
     # ========================================================
     data = {
         "Curricular units 1st sem (approved)": approved1,
@@ -113,40 +113,25 @@ if st.button("🔍 Analizar Riesgo", use_container_width=True):
     }
 
     # ========================================================
-    # FEATURES DERIVADAS (IGUAL QUE ENTRENAMIENTO)
+    # FEATURES DERIVADAS (SOLO LAS DEL ENTRENAMIENTO)
     # ========================================================
-    aprobacion_rate_1 = approved1 / enrolled1 if enrolled1 > 0 else 0
-    aprobacion_rate_2 = approved2 / enrolled2 if enrolled2 > 0 else 0
-    variacion_rendimiento = grade2 - grade1
-    carga_total = enrolled1 + enrolled2
-    riesgo_financiero = (
+    data["aprobacion_rate_1"] = approved1 / enrolled1 if enrolled1 > 0 else 0
+    data["aprobacion_rate_2"] = approved2 / enrolled2 if enrolled2 > 0 else 0
+    data["variacion_rendimiento"] = grade2 - grade1
+    data["carga_total"] = enrolled1 + enrolled2
+    data["riesgo_financiero"] = (
         (1 if tuition == "No" else 0) +
         (1 if debtor == "Sí" else 0) +
         (1 if scholarship == "No" else 0)
     )
 
-    ratio_notas = grade2 / (grade1 + 1e-5)
-    estres_academico = carga_total / (age + 1)
-
-    # Agregar al diccionario
-    data.update({
-        "aprobacion_rate_1": aprobacion_rate_1,
-        "aprobacion_rate_2": aprobacion_rate_2,
-        "variacion_rendimiento": variacion_rendimiento,
-        "carga_total": carga_total,
-        "riesgo_financiero": riesgo_financiero,
-        "ratio_notas": ratio_notas,
-        "estres_academico": estres_academico
-    })
+    # ========================================================
+    # DATAFRAME FINAL
+    # ========================================================
+    df_input = pd.DataFrame([data])[features_order]
 
     # ========================================================
-    # DATAFRAME FINAL ORDENADO
-    # ========================================================
-    df_input = pd.DataFrame([data])
-    df_input = df_input[features_order]  # 🔥 ORDEN EXACTO
-
-    # ========================================================
-    # PREDICCIÓN (PIPELINE)
+    # PREDICCIÓN
     # ========================================================
     proba = model.predict_proba(df_input)[0][1]
 
@@ -161,12 +146,12 @@ if st.button("🔍 Analizar Riesgo", use_container_width=True):
         st.metric("Probabilidad", f"{proba:.2%}")
 
     with colB:
-        if proba >= 0.7:
-            st.error("RIESGO CRÍTICO")
-        elif proba >= 0.4:
-            st.warning("RIESGO MEDIO")
+        if proba >= 0.75:
+            st.error("🚨 RIESGO CRÍTICO")
+        elif proba >= THRESHOLD:
+            st.warning("⚠️ RIESGO MEDIO")
         else:
-            st.success("RIESGO BAJO")
+            st.success("✅ RIESGO BAJO")
 
     with colC:
         st.info("Modelo MLP + Pipeline")
@@ -174,19 +159,8 @@ if st.button("🔍 Analizar Riesgo", use_container_width=True):
     st.progress(float(proba))
 
     # ========================================================
-    # RECOMENDACIÓN
-    # ========================================================
-    st.subheader("💡 Recomendación")
-
-    if proba >= 0.7:
-        st.write("⚠️ Intervención inmediata (académica + financiera)")
-    elif proba >= 0.4:
-        st.write("📌 Seguimiento continuo")
-    else:
-        st.write("✅ Estudiante estable")
-
-    # ========================================================
-    # DEBUG (MUY IMPORTANTE PARA VALIDAR)
+    # DEBUG
     # ========================================================
     with st.expander("🔎 Ver datos procesados"):
         st.dataframe(df_input)
+        st.write(f"Probabilidad cruda: {proba}")
