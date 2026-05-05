@@ -91,6 +91,8 @@ if st.button("🔍 Analizar Riesgo de Deserción", use_container_width=True):
     # ========================================================
     data["aprobacion_rate_1"] = approved1 / enrolled1 if enrolled1 > 0 else 0
     data["aprobacion_rate_2"] = approved2 / enrolled2 if enrolled2 > 0 else 0
+    data["ratio_notas"] = grade2 / (grade1 + 1e-5)
+    data["estres_academico"] = (enrolled1 + enrolled2) / (age + 1)
     data["variacion_rendimiento"] = grade2 - grade1
     data["carga_total"] = enrolled1 + enrolled2
     data["riesgo_financiero"] = (
